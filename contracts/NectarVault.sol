@@ -3,7 +3,7 @@ pragma solidity ^0.8;
 import { IERC4626 } from "./interfaces/IERC4626.sol";
 import { ERC20 } from "@OpenZeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract SolidityVault is IERC4626, ERC20 {
+contract NectarVault is IERC4626, ERC20 {
     address public asset;
 
     constructor(address _asset) ERC20("Test Vault", "vTEST") {
@@ -72,7 +72,7 @@ contract SolidityVault is IERC4626, ERC20 {
         return assets;
     }
 
-    function mint(uint256 shares) external returns (uint256) {
+    function mint(uint256 shares) external virtual returns (uint256) {
         return mint(shares, msg.sender);
     }
 
