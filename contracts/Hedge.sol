@@ -5,11 +5,13 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IOrderCallbackReceiver} from "./interfaces/IOrderCallbackReceiver.sol";
 import {Router} from "./interfaces/Router.sol";
-import {CreateOrderParams, CreateOrderParamsAddresses, CreateOrderParamsNumbers, OrderType, DecreasePositionSwapType} from "./interfaces/CreateOrderParams.sol";
+import {Order} from "./lib/Order.sol";
+import {EventUtils} from "./lib/EventUtils.sol";
+import {IBaseOrderUtils} from "./interfaces/IBaseOrderUtils.sol"; 
 
 contract Hedge is ERC20, IOrderCallbackReceiver {
     using SafeERC20 for IERC20;
-    using Order for Props;
+
 
     event HedgeOpened(
         address indexed account,
@@ -31,6 +33,7 @@ contract Hedge is ERC20, IOrderCallbackReceiver {
         bytes32 orderKey,
         uint256 collateralAmount
     );
+    event OrderFrozen(address indexed account, bytes32 orderKey);
 
     // Mapping from orderKey to OrderInfo
     mapping(bytes32 => address) public orders;
@@ -44,24 +47,24 @@ contract Hedge is ERC20, IOrderCallbackReceiver {
     address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
     address public constant GMX_MARKET = 0x6853EA96FF216fAb11D2d930CE3C508556A4bdc4;
     address public constant ZERO_ADDRESS = 0x0000000000000000000000000000000000000000;
-    address public constant HEDGE_VAULT = address(this);
+    address public immutable HEDGE_VAULT = address(this);
 
-    constructor() {}
+    constructor() ERC20("HedgeVault", "HEDGE") {}
 
     function hedge(
         uint256 amount,
         address account,
-        CreateOrderParams orderParams
+        IBaseOrderUtils.CreateOrderParams calldata orderParams
     ) external {
         require(amount > 0, "Invalid deposit amount");
-        _validateOrderParams(orderParams);
+        _validateOrderParams(orderParams, amount);
         _hedge(amount, account, orderParams);
     }
 
     function _hedge(
         uint256 amount,
         address account,
-        CreateOrderParams orderParams
+        IBaseOrderUtils.CreateOrderParams calldata orderParams
     ) internal returns (uint256, address) {
         // Take Hedge fee logic here
 
@@ -79,11 +82,13 @@ contract Hedge is ERC20, IOrderCallbackReceiver {
         emit HedgeOpened(account, key, orderParams.numbers.sizeDeltaUsd);
     }
 
-    function unHedge(uint256 shares, CreateOrderParams orderParams) external {
+    function unHedge(address account, uint256 shares, IBaseOrderUtils.CreateOrderParams calldata orderParams) external {
+        // Check sender address
+        require(msg.sender == account, "Not account owner");
         // Check account's available shares
-        require(balanceOf(msg.sender) >= shares, "Insufficient balance");
+        require(balanceOf(account) >= shares, "Insufficient balance");
 
-        _validateOrderParams(orderParams);
+        _validateOrderParams(orderParams, shares);
 
         // Transfer execution fee to orderVault
         IERC20(WETH).safeTransferFrom(
@@ -119,7 +124,7 @@ contract Hedge is ERC20, IOrderCallbackReceiver {
 
     function afterOrderExecution(
         bytes32 key,
-        Order.props memory order,
+        Order.Props memory order,
         EventUtils.EventLogData memory eventData
     ) external override {
         
@@ -130,13 +135,13 @@ contract Hedge is ERC20, IOrderCallbackReceiver {
         _removeOrder(key, _account);
 
         // If increaseOrder (Hedge) then mint shares
-        if (order.orderType == 2) {
+        if (order.numbers.orderType == Order.OrderType.MarketIncrease) {
             
             // Mint shares
             _mint(_account, order.numbers.sizeDeltaUsd);
 
         // If decreaseOrder (unHedge) initiate withdrawal
-        } else if (order.orderType == 3) {
+        } else if (order.numbers.orderType == Order.OrderType.MarketDecrease) {
 
             // burn shares and withdraw collateral
             _burn(_account, order.numbers.sizeDeltaUsd);
@@ -161,7 +166,7 @@ contract Hedge is ERC20, IOrderCallbackReceiver {
         _removeOrder(key, _account);
 
         // If increaseOrder (Hedge) then return collateral to depositor
-        if (order.orderType == 2) {
+        if (order.numbers.orderType == Order.OrderType.MarketIncrease) {
         
             // Transfer the collateral back to the order receiver
             IERC20(WETH).transferFrom(ORDER_VAULT, _account, order.numbers.initialCollateralDeltaAmount);
@@ -170,12 +175,25 @@ contract Hedge is ERC20, IOrderCallbackReceiver {
         // If decreaseOrder (unHedge), there is nothing to return
     
         // Emit order cancelled event
-        emit OrderCancelled(_account, key, collateralAmount);
+        emit OrderCancelled(_account, key, order.numbers.initialCollateralDeltaAmount);
     }
+
+    // @dev called after an order has been frozen
+    function afterOrderFrozen(
+        bytes32 key,
+        Order.Props memory order,
+        EventUtils.EventLogData memory eventData
+    ) external override {
+        address _account = orders[key];
+        emit OrderFrozen(_account, key);
+        // Automatically cancel the frozen order
+        Router(GMX_ROUTER).cancelOrder(key);
+    }
+
 
     // Function to verify validity of order parameters for Hedge contract
     function _validateOrderParams(
-        CreateOrderParams memory params,
+        IBaseOrderUtils.CreateOrderParams memory params,
         uint256 amount
     ) internal view {
         // Validate addresses
@@ -201,7 +219,7 @@ contract Hedge is ERC20, IOrderCallbackReceiver {
         );
 
         // Validate order type
-        if (params.orderType == OrderType.MarketIncrease) {
+        if (params.orderType == Order.OrderType.MarketIncrease) {
             // Validate numbers for deposits
             require(
                 params.numbers.sizeDeltaUsd ==
@@ -216,7 +234,7 @@ contract Hedge is ERC20, IOrderCallbackReceiver {
                     amount,
                 "Invalid collateral delta and execution fee"
             );
-        } else if (params.orderType == OrderType.MarketDecrease) {
+        } else if (params.orderType == Order.OrderType.MarketDecrease) {
             // Additional checks for withdrawals can be implemented here
             // Validate numbers for deposits
             require(

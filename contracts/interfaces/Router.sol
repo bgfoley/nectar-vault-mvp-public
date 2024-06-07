@@ -21,4 +21,6 @@ interface Router is IBaseOrderUtils {
     function createOrder(
         CreateOrderParams calldata params
     ) external returns (bytes32);
+
+    function cancelOrder(bytes32 key) external;
 }
