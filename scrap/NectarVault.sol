@@ -106,8 +106,9 @@ contract NectarVault is IERC4626, ERC20 {
         return shares;
     }
 
-    function withdraw(uint256 assets, address receiver) external returns (uint256) {
-        return withdraw(assets, receiver, msg.sender);
+    function _withdraw(address from, address receiver, uint256 assets, uint256 shares) internal returns (uint256) {
+        
+        // Burn shares
     }
 
     function withdraw(uint256 assets) external returns (uint256) {

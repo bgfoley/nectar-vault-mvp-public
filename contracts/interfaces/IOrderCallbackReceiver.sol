@@ -2,8 +2,8 @@
 
 pragma solidity ^0.8.0;
 
-import "../GMX/EventUtils.sol";
-import "../GMX/Order.sol";
+import "../lib/EventUtils.sol";
+import "../lib/Order.sol";
 
 // @title IOrderCallbackReceiver
 // @dev interface for an order callback contract

@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.0;
 
-import "./ArbSys.sol";
+import "../interfaces/ArbSys.sol";
 
 // @title Chain
 // @dev Wrap the calls to retrieve chain variables to handle differences

@@ -2,14 +2,86 @@
 pragma solidity ^0.8.0;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IOrderCallbackReceiver} from "./interfaces/IOrderCallbackReceiver.sol";
-import {Router} from "./interfaces/Router.sol";
-import {CreateOrderParams, CreateOrderParamsAddresses, CreateOrderParamsNumbers, OrderType, DecreasePositionSwapType} from "./interfaces/CreateOrderParams.sol";
 
-contract Hedge is ERC20, IOrderCallbackReceiver {
+
+/// @dev Interface for GMX's Exchange Router
+/// @notice Switch this out for an import
+interface Router {
+    function sendWnt(
+        uint256 sendWnt,
+        address receiver,
+        uint256 amount
+    ) external payable;
+    function sendTokens(
+        address token,
+        address receiver,
+        uint256 amount
+    ) external payable;
+    function createOrder(
+        CreateOrderParams calldata params
+    ) external returns (bytes32);
+}
+
+contract Hedge is NectarVault, IOrderCallbackReceiver {
     using SafeERC20 for IERC20;
-    using Order for Props;
+
+    /// @notice createOrderParamsAddresses for GMX orders
+    /// @param receiver is Hedge Vault
+    /// @param callbackContract is Hedge Vault
+    /// @param uiFeeReceiver 0x0
+    /// @param market is GMX market_key address
+    struct CreateOrderParamsAddresses {
+        address receiver; // address(this)
+        address callbackContract; // address(this)
+        address uiFeeReceiver; // 0x0000000000000000000000000000000000000000
+        address market; // 0x70d95587d40A2caf56bd97485aB3Eec10Bee6336
+        address initialCollateralToken; //  WETH 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
+        address[] swapPath;
+    }
+
+    /// @notice createOrderParamsNumbers for GMX orders
+    /// @param sizeDeltaUsd is order size, calculated by UI
+    /// @param initialCollateralDeltaAmount
+    /// @param uiFeeReceiver 0x0
+    /// @param market is GMX market_key address
+    struct CreateOrderParamsNumbers {
+        uint256 sizeDeltaUsd;
+        uint256 initialCollateralDeltaAmount;
+        uint256 triggerPrice;
+        uint256 acceptablePrice;
+        uint256 executionFee;
+        uint256 callbackGasLimit;
+        uint256 minOutputAmount;
+    }
+
+    enum OrderType {
+        MarketSwap,
+        LimitSwap,
+        MarketIncrease,
+        LimitIncrease,
+        MarketDecrease,
+        LimitDecrease,
+        StopLossDecrease,
+        Liquidation
+    }
+
+    enum DecreasePositionSwapType {
+        NoSwap,
+        SwapPnlTokenToCollateralToken,
+        SwapCollateralTokenToPnlToken
+    }
+
+    struct CreateOrderParams {
+        CreateOrderParamsAddresses addresses;
+        CreateOrderParamsNumbers numbers;
+        OrderType orderType;
+        DecreasePositionSwapType decreasePositionSwapType;
+        bool isLong;
+        bool shouldUnwrapNativeToken;
+        bytes32 referralCode;
+    }
 
     event HedgeOpened(
         address indexed account,
