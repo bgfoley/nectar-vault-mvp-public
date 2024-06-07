@@ -173,20 +173,6 @@ contract Hedge is ERC20, IOrderCallbackReceiver {
         emit OrderCancelled(_account, key, collateralAmount);
     }
 
-    function _mint(
-        uint256 shares,
-        address receiver
-    ) internal override returns (uint256) {
-     
-
-        // Mint shares
-        _mint(receiver, shares);
-
-        // Update vault assetts
-
-        return shares;
-    }
-
     // Function to verify validity of order parameters for Hedge contract
     function _validateOrderParams(
         CreateOrderParams memory params,
