@@ -10,16 +10,20 @@ contract NectarVault is IERC4626, ERC20 {
         asset = _asset;
     }
 
-    function totalAssets() public view returns (uint256) {
-        return ERC20(asset).balanceOf(address(this));
+
+    // View function to see vault's GMX account value in ETH
+    function totalAssets() public view virtual returns (uint256) {
+       // return ERC20(asset).balanceOf(address(this));
     }
 
+    // View function to calculate eth value of shares
     function convertToAssets(uint256 shares) public view returns (uint256) {
         uint256 _totalSupply = totalSupply();
         if (_totalSupply == 0) return 0;
         return (shares * totalAssets()) / _totalSupply;
     }
 
+    // View function to calculate share value of ETH amount
     function convertToShares(uint256 assets) public view returns (uint256) {
         uint256 _totalSupply = totalSupply();
         uint256 _totalAssets = totalAssets();
