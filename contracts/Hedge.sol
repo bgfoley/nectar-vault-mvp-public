@@ -42,7 +42,7 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
     address public constant ORDER_VAULT = 0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5;
     address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
-    address public constant GMX_MARKET = 0x6853EA96FF216fAb11D2d930CE3C508556A4bdc4;
+    address public constant GMX_MARKET = 0x70d95587d40A2caf56bd97485aB3Eec10Bee6336;
     address public constant ZERO_ADDRESS = 0x0000000000000000000000000000000000000000;
     bytes32 private constant GMX_CONTROLLER = 0x97adf037b2472f4a6a9825eff7d2dd45e37f2dc308df2a260d6a72af4189a65b;
     address public immutable HEDGE_VAULT = address(this);
@@ -72,13 +72,46 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
         dataStore = IDataStore(_dataStore);
     }
 
-    function getTotalValueHedged() external view returns (uint256) {
-        uint256 _totalValueHedged = reader.getAccountPositions(address(dataStore), address(this), 0, 1)
+     /**
+     * @notice Get the size of the short position held by the contract
+     * @return The size of the short position in USD
+     */
+    function getPositionSizeUsd() external view returns (uint256) {
+        Position.Props[] memory positions = reader.getAccountPositions(address(dataStore), address(this), 0, 1);
+        if (positions.length > 0 && !positions[0].isLong) {
+            return positions[0].numbers.sizeInUsd;
+        }
+        return 0;
     }
-    function getAccountPositions(address dataStore, address account, uint256 start, uint256 end) external view returns (Position.Props[] memory);
+
+     /**
+     * @notice Get the size of the short position held by the contract
+     * @return The size of the short position in tokens
+     */
+    function getPositionSizeTokens() external view returns (uint256) {
+        Position.Props[] memory positions = reader.getAccountPositions(address(dataStore), address(this), 0, 1);
+        if (positions.length > 0 && !positions[0].isLong) {
+            return positions[0].numbers.sizeInTokens;
+        }
+        return 0;
+    }
+
+     /**
+     * @notice Get the size of the short position held by the contract
+     * @return The size of the short position in USD
+     */
+    function getCollateralAmount() external view returns (uint256) {
+        Position.Props[] memory positions = reader.getAccountPositions(address(dataStore), address(this), 0, 1);
+        if (positions.length > 0 && !positions[0].isLong) {
+            return positions[0].numbers.collateralAmount;
+        }
+        return 0;
+    }
+
 
     /**
-     * @notice Opens a hedge position
+     * @notice Initiates the process to open a hedge position. Shares are not minted until
+     *    afterOrderExecution is called
      * @param amount The amount of WETH to hedge
      * @param user The address of the user initiating the hedge
      * @param orderParams The order parameters for creating the hedge order
@@ -99,8 +132,8 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
     }
 
     /**
-     * @notice Internal function to handle the hedge logic
-     * @param amount The amount of WETH to hedge
+     * @notice Internal function to handle order creation for hedge position
+     * @param amount The amount of WETH to hedge, includes execution fee
      * @param user The address of the user initiating the hedge
      * @param orderParams The order parameters for creating the hedge order
      * @return key The unique identifier for the created order
@@ -129,9 +162,9 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
     }
 
     /**
-     * @notice Closes a hedge position
+     * @notice Initiates the closing of a hedge position
      * @param user The address of the user unhedging
-     * @param shares The amount of shares to unhedge
+     * @param shares The quantity of shares to unhedge
      * @param orderParams The order parameters for creating the unhedge order
      */
     function unHedge(address user, uint256 shares, IBaseOrderUtils.CreateOrderParams calldata orderParams) external {
@@ -296,6 +329,20 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
         require(params.shouldUnwrapNativeToken == true, "Order must unwrap native token");
     }
 
+    function claimFundingFees() public onlyOwner returns (uint256[] memory) {
+   
+        address[] memory markets = new address[](2);
+        address[] memory tokens = new address[](2);
+        
+        markets[0] = GMX_MARKET;
+        markets[1] = GMX_MARKET;
+        tokens[0] = WETH;
+        tokens[1] = USDC;
+        
+        // Call the claimFundingFees function
+        return Router(GMX_ROUTER).claimFundingFees(markets, tokens, HEDGE_VAULT);
+    }
+    
     /**
      * @notice Owner-only function to place any order for testing or emergency purposes
      * @param orderParams The order parameters for creating the order

@@ -72,42 +72,10 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
         dataStore = IDataStore(_dataStore);
     }
 
-     /**
-     * @notice Get the size of the short position held by the contract
-     * @return The size of the short position in USD
-     */
-    function getPositionSizeUsd() external view returns (uint256) {
-        Position.Props[] memory positions = reader.getAccountPositions(address(dataStore), address(this), 0, 1);
-        if (positions.length > 0 && !positions[0].isLong) {
-            return positions[0].numbers.sizeInUsd;
-        }
-        return 0;
+    function getTotalValueHedged() external view returns (uint256) {
+        uint256 _totalValueHedged = reader.getAccountPositions(address(dataStore), address(this), 0, 1)
     }
-
-     /**
-     * @notice Get the size of the short position held by the contract
-     * @return The size of the short position in tokens
-     */
-    function getPositionSizeTokens() external view returns (uint256) {
-        Position.Props[] memory positions = reader.getAccountPositions(address(dataStore), address(this), 0, 1);
-        if (positions.length > 0 && !positions[0].isLong) {
-            return positions[0].numbers.sizeInTokens;
-        }
-        return 0;
-    }
-
-     /**
-     * @notice Get the size of the short position held by the contract
-     * @return The size of the short position in USD
-     */
-    function getCollateralAmount() external view returns (uint256) {
-        Position.Props[] memory positions = reader.getAccountPositions(address(dataStore), address(this), 0, 1);
-        if (positions.length > 0 && !positions[0].isLong) {
-            return positions[0].numbers.collateralAmount;
-        }
-        return 0;
-    }
-
+    function getAccountPositions(address dataStore, address account, uint256 start, uint256 end) external view returns (Position.Props[] memory);
 
     /**
      * @notice Opens a hedge position
