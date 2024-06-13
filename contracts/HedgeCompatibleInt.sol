@@ -93,7 +93,7 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
     }
 
     /**
-     * @notice Get the size of the short position held by the contract
+     * @notice Get the size of the short position held by the contract's account
      * @return The size of the short position in tokens
      */
     function getPositionSizeTokens() external view returns (uint256) {
@@ -105,7 +105,7 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
     }
 
     /**
-     * @notice Get the size of the short position held by the contract
+     * @notice Get the amount of collateral held by the contract's account
      * @return The size of the short position in USD
      */
     function getCollateralAmount() external view returns (uint256) {
@@ -116,33 +116,41 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
         return 0;
     }
 
+    // Function to convert USD value in 1e30 to vault shares in 1e18
+    function usdToShares(uint256 usdAmount) internal pure returns (uint256) {
+        return usdAmount / 1e12;
+    }
+
+    // Function to convert vault shares in 1e18 to USD value in 1e30
+    function sharesToUsd(uint256 sharesAmount) internal pure returns (uint256) {
+        return sharesAmount * 1e12;
+    }
+
     /**
      * @notice Initiates the process to open a hedge position. Shares are not minted until
      *    afterOrderExecution is called
      * @param amount The amount of WETH to hedge
-     * @param user The address of the user initiating the hedge
-     * @param sizeDeltaUsd The size of the position in USD
-     * @param initialCollateralDeltaAmount The initial collateral amount in ETH
-     * @param executionFee The execution fee for the order
+     * @param acceptablePrice The acceptable price for the order
      * @return key The unique identifier for the created order
      * @return orderAccount The user account associated with the order
      */
     function hedge(
         uint256 amount,
-        address user,
-        uint256 sizeDeltaUsd,
-        uint256 initialCollateralDeltaAmount,
-        uint256 executionFee
+        uint256 acceptablePrice
     ) external returns (bytes32 key, address orderAccount) {
         require(amount > 0, "Invalid deposit amount");
+
+        uint256 executionFee = 3000000000000; // Assumed execution fee in wei (3e-06 ETH)
+        uint256 initialCollateralDeltaAmount = amount - executionFee;
+        uint256 sizeDeltaUsd = (initialCollateralDeltaAmount * acceptablePrice) / 1e18;
 
         IBaseOrderUtils.CreateOrderParamsNumbers memory orderParamsNumbers = IBaseOrderUtils.CreateOrderParamsNumbers({
             sizeDeltaUsd: sizeDeltaUsd,
             initialCollateralDeltaAmount: initialCollateralDeltaAmount,
             triggerPrice: 0,
-            acceptablePrice: 0,
+            acceptablePrice: acceptablePrice,
             executionFee: executionFee,
-            callbackGasLimit: 0,
+            callbackGasLimit: 3_000_000, 
             minOutputAmount: 0
         });
 
@@ -158,7 +166,7 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
 
         // Validate order params
         _validateOrderParams(orderParams, amount);
-        (key, orderAccount) = _hedge(amount, user, orderParams);
+        (key, orderAccount) = _hedge(amount, msg.sender, orderParams);
     }
 
     /**
@@ -195,34 +203,64 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
      * @param shares The quantity of shares to unhedge
      * @param orderParams The order parameters for creating the unhedge order
      */
-    function unHedge(address user, uint256 shares, IBaseOrderUtils.CreateOrderParams calldata orderParams) external {
-        // Check sender address
-        require(msg.sender == user, "Not user owner");
+    function unHedge(
+        uint256 shares,
+        uint256 acceptablePrice
+    ) external {
+        require(shares > 0, "Invalid shares amount");
+
+        uint256 executionFee = 3000000000000; // Assumed execution fee in wei (3e-06 ETH)
+        uint256 initialCollateralDeltaAmount = (sharesToUsd(shares) / acceptablePrice) * 1e18; // Convert shares to collateral amount
+        uint256 sizeDeltaUsd = sharesToUsd(shares);
+
+        IBaseOrderUtils.CreateOrderParamsNumbers memory orderParamsNumbers = IBaseOrderUtils.CreateOrderParamsNumbers({
+            sizeDeltaUsd: sizeDeltaUsd,
+            initialCollateralDeltaAmount: initialCollateralDeltaAmount,
+            triggerPrice: 0,
+            acceptablePrice: acceptablePrice,
+            executionFee: executionFee,
+            callbackGasLimit: 3_000_000, // Set to 3 million gas
+            minOutputAmount: 0
+        });
+
+        IBaseOrderUtils.CreateOrderParams memory orderParams = IBaseOrderUtils.CreateOrderParams({
+            addresses: defaultOrderParamsAddresses,
+            numbers: orderParamsNumbers,
+            orderType: Order.OrderType.MarketDecrease,
+            decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
+            isLong: false,
+            shouldUnwrapNativeToken: true,
+            referralCode: bytes32(0)
+        });
+
+        // Validate order params
+        _validateOrderParams(orderParams, shares);
+        _unHedge(msg.sender, shares, orderParams);
+    }
+
+    function _unHedge(
+        address user,
+        uint256 shares,
+        IBaseOrderUtils.CreateOrderParams calldata orderParams
+    ) internal {
         // Check user's available shares, considering locked shares
         require(balanceOf(user) - lockedShares[user] >= shares, "Insufficient balance");
+
         // Lock the shares
         lockedShares[user] += shares;
-        // Check order type
-        require(orderParams.orderType == Order.OrderType.MarketDecrease, "Order must be a market decrease");
-
-        _validateOrderParams(orderParams, shares);
 
         // Transfer execution fee to orderVault
-        IERC20(WETH).safeTransferFrom(
-            user,
-            ORDER_VAULT,
-            orderParams.numbers.executionFee
-        );
+        IERC20(WETH).safeTransferFrom(user, ORDER_VAULT, orderParams.numbers.executionFee);
 
-        // Call Exchange Router to transfer execution fee to order vault
+        // Call Exchange Router to createOrder
         bytes32 key = Router(GMX_ROUTER).createOrder(orderParams);
 
         // Update orders and accounts
         accountOrders[user].push(key);
-        orders[key] = msg.sender;
+        orders[key] = user;
 
         // Emit HedgeClosed event
-        emit HedgeClosed(msg.sender, key, orderParams.numbers.sizeDeltaUsd);
+        emit HedgeClosed(user, key, orderParams.numbers.sizeDeltaUsd);
     }
 
     /**
@@ -251,30 +289,24 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
      * @param eventData Additional event data
      */
     function afterOrderExecution(bytes32 key, Order.Props memory order, EventUtils.EventLogData memory eventData) external override {
-        // Validate message origin as GMX Controller
         require(roleStore.hasRole(msg.sender, GMX_CONTROLLER), "Invalid role");
-        
-        // Get user account
-        address _user = orders[key];
 
-        // Remove from account orders list
+        address _user = orders[key];
         _removeOrder(key, _user);
 
-        // If increaseOrder (Hedge) then mint shares
         if (order.numbers.orderType == Order.OrderType.MarketIncrease) {
-            // Mint shares
-            _mint(_user, order.numbers.sizeDeltaUsd);
-        // If decreaseOrder (unHedge) initiate withdrawal
+            uint256 shares = usdToShares(order.numbers.sizeDeltaUsd);
+            _mint(_user, shares);
         } else if (order.numbers.orderType == Order.OrderType.MarketDecrease) {
-            // Burn shares and withdraw collateral
-            _burn(_user, order.numbers.sizeDeltaUsd);
+            uint256 usdAmount = sharesToUsd(order.numbers.sizeDeltaUsd);
+            _burn(_user, usdAmount);
             IERC20(WETH).safeTransferFrom(ORDER_VAULT, _user, order.numbers.initialCollateralDeltaAmount);
-            // Unlock shares
-            lockedShares[_user] -= order.numbers.sizeDeltaUsd;
+            lockedShares[_user] -= usdAmount;
         }
 
         emit OrderExecuted(_user, key, order.numbers.initialCollateralDeltaAmount);
     }
+
 
     /**
      * @notice Callback function called after order cancellation
@@ -326,24 +358,30 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
     }
 
     /**
-     * @notice Function to verify validity of order parameters for the Hedge contract
+     * @notice Function to verify the validity of order parameters for the Hedge contract
      * @param params The order parameters
      * @param amount The amount associated with the order
      */
     function _validateOrderParams(IBaseOrderUtils.CreateOrderParams memory params, uint256 amount) internal view {
+        // Convert acceptable price from 1e30 to 1e18 for validation
+        uint256 acceptablePrice18 = params.numbers.acceptablePrice / 1e12;
+        
         if (params.orderType == Order.OrderType.MarketIncrease) {
-            // Validate numbers for deposits 
-            require(params.numbers.sizeDeltaUsd == (params.numbers.initialCollateralDeltaAmount * params.numbers.acceptablePrice) / 1e18, "Invalid sizeDeltaUsd");
+            // Validate numbers for deposits
+            uint256 expectedSizeDeltaUsd = (params.numbers.initialCollateralDeltaAmount * acceptablePrice18) / 1e18;
+            require(params.numbers.sizeDeltaUsd == expectedSizeDeltaUsd, "Invalid sizeDeltaUsd");
             require(params.numbers.initialCollateralDeltaAmount + params.numbers.executionFee == amount, "Invalid collateral delta and execution fee");
         } else if (params.orderType == Order.OrderType.MarketDecrease) {
             // Additional checks for withdrawals can be implemented here
-            // Validate numbers for deposits
-            require(params.numbers.sizeDeltaUsd == (params.numbers.initialCollateralDeltaAmount * params.numbers.acceptablePrice) / 1e18, "Invalid sizeDeltaUsd");
+            // Validate numbers for withdrawals
+            uint256 expectedSizeDeltaUsd = (params.numbers.initialCollateralDeltaAmount * acceptablePrice18) / 1e18;
+            require(params.numbers.sizeDeltaUsd == expectedSizeDeltaUsd, "Invalid sizeDeltaUsd");
             require(params.numbers.initialCollateralDeltaAmount + params.numbers.executionFee == amount, "Invalid collateral delta and execution fee");
         } else {
             revert("Invalid order type");
         }
     }
+
 
     function claimFundingFees() public onlyOwner returns (uint256[] memory) {
    

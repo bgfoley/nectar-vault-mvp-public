@@ -29,14 +29,14 @@ async function main() {
     const depositEthBn = ethers.parseUnits(depositEth, 18);
 
     // Step 2: Get ETH price using the token address
-    const ethPriceBn = await getSignedPrices(TOKEN_ADDRESS);
+    const ethPrice = await getSignedPrices(TOKEN_ADDRESS);
 
     // Step 3: Get execution fee
     const executionFeeBn = BigInt(await getExecutionFee());
 
     // Step 4: Calculate sizeDeltaUSD and initialCollateralDeltaAmount
     const initialCollateralDeltaAmount = depositEthBn - executionFeeBn;
-    const sizeDeltaUsd = initialCollateralDeltaAmount * ethPriceBn / 10n**30n;
+    const sizeDeltaUsd = (initialCollateralDeltaAmount * ethPrice) / 10n**12n; // Adjusted for 1e30 denomination
 
     // Display calculated values
     console.log(`Size Delta (USD): ${sizeDeltaUsd} USD`);

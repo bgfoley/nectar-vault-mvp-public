@@ -16,7 +16,7 @@ const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
 
 // Define the Hedge contract ABI (add your contract's ABI here)
 const hedgeAbi = [
-    "function hedge(uint256 amount, uint256 acceptablePrice) external returns (bytes32 key, address orderAccount)"
+    "function unHedge(uint256 shares, uint256 acceptablePrice) external returns (bytes32 key, address orderAccount)"
 ];
 
 // Connect to the Hedge contract
@@ -24,10 +24,10 @@ const hedgeAbi = [
 
 async function main() {
   try {
-    // Step 1: Query the user for the amount of ETH to deposit and slippage tolerance
-    const depositEth = readlineSync.question('Enter the amount of ETH to deposit: ');
+    // Step 1: Query the user for the amount of shares to unhedge and slippage tolerance
+    const unHedgeShares = readlineSync.question('Enter the amount of shares to unhedge: ');
     const slippageTolerance = readlineSync.question('Enter your slippage tolerance (e.g., 0.01 for 1%): ');
-    const depositEthBn = BigInt(ethers.parseUnits(depositEth, 18).toString());
+    const unHedgeSharesBn = BigInt(ethers.parseUnits(unHedgeShares, 18).toString());
 
     // Step 2: Get ETH price using the token address
     const ethPrice = await getSignedPrices(TOKEN_ADDRESS);
@@ -39,14 +39,14 @@ async function main() {
     // Step 4: Get execution fee
     const executionFeeBn = BigInt(await getExecutionFee());
 
-    // Step 5: Log the calculated values and parameters for the hedge function
+    // Step 5: Log the calculated values and parameters for the unhedge function
     console.log(`ETH Price (USD): ${Number(ethPrice) / 1e30} USD`);
     console.log(`Acceptable Price: ${acceptablePrice}`);
     console.log(`Execution Fee: ${executionFeeBn} ETH`);
 
-    // Log the arguments that would be input for the hedge function call
-    console.log("Arguments for hedge function call:");
-    console.log(`Amount: ${depositEthBn}`);
+    // Log the arguments that would be input for the unhedge function call
+    console.log("Arguments for unhedge function call:");
+    console.log(`Shares: ${unHedgeSharesBn}`);
     console.log(`Acceptable Price: ${acceptablePrice}`);
 
   } catch (error) {
