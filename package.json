@@ -17,8 +17,11 @@
   "dependencies": {
     "@nomicfoundation/hardhat-verify": "^2.0.4",
     "@openzeppelin/contracts": "^5.0.2",
+    "axios": "^1.7.2",
     "currency.js": "^2.0.4",
-    "dotenv": "^16.4.3",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.0",
+    "readline-sync": "^1.4.10",
     "solhint": "^4.1.1"
   },
   "scripts": {

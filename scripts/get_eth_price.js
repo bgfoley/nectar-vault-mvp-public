@@ -54,3 +54,5 @@ async function getMedianETHPrice(chain) {
 // Example usage:
 const chain = 'arbitrum'; // or 'avalanche'
 getMedianETHPrice(chain);
+
+
