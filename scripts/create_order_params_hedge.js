@@ -2,7 +2,7 @@ require('dotenv').config();
 const readlineSync = require('readline-sync');
 const { ethers } = require('ethers');
 const getExecutionFee = require('./get_execution_fee');
-const getSignedPrices = require('./get_signed_prices2');
+const getSignedPrices = require('./get_signed_prices');
 
 // Load environment variables
 const ARBITRUM_URL = process.env.ARBITRUM_URL;
@@ -41,7 +41,7 @@ async function main() {
 
     // Step 6: Create the order parameters
     const slippageTolerance = readlineSync.question('Enter your slippage tolerance (e.g., 0.01 for 1%): ');
-    const slippageMultiplier = 1n - BigInt(Math.floor(parseFloat(slippageTolerance) * 1e18));
+    const slippageMultiplier = BigInt(Math.floor((1 - parseFloat(slippageTolerance)) * 1e18));
     const acceptablePrice = ethPrice * slippageMultiplier / 10n ** 18n;
 
     const orderParams = {

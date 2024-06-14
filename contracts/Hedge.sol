@@ -21,7 +21,6 @@ import {IDataStore} from "./interfaces/IDataStore.sol";
  */
 contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
     using SafeERC20 for IERC20;
-    using Position for Position.Props;
 
     event HedgeOpened(address indexed user, bytes32 key, uint256 sizeDeltaUsd);
     event HedgeClosed(address indexed user, bytes32 key, uint256 sizeDeltaUsd);
@@ -29,13 +28,13 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
     event OrderCancelled(address indexed user, bytes32 key, uint256 collateralAmount);
     event OrderFrozen(address indexed user, bytes32 key);
 
-    // Mapping from key to OrderInfo
+    /// @dev Mapping from key to OrderInfo
     mapping(bytes32 => address) public orders;
 
-    // Mapping from user address to list of orderKeys
+    /// @dev Mapping from user address to list of orderKeys
     mapping(address => bytes32[]) public accountOrders;
 
-    // Mapping from user address to locked shares
+    /// @dev Mapping from user address to locked shares
     mapping(address => uint256) public lockedShares;
 
     address public constant GMX_ROUTER = 0x7C68C7866A64FA2160F78EEaE12217FFbf871fa8;
@@ -47,12 +46,15 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
     bytes32 private constant GMX_CONTROLLER = 0x97adf037b2472f4a6a9825eff7d2dd45e37f2dc308df2a260d6a72af4189a65b;
     address public immutable HEDGE_VAULT = address(this);
     
+    /// @dev GMX rolestore 
     IRoleStore public roleStore;
+    /// @dev GMX reader contract 
     IReader public reader;
+    /// @dev GMX datastore
     IDataStore public dataStore;
 
-    // address DATA_STORE = 0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8;
-    // address READER = 0xf60becbba223EEA9495Da3f606753867eC10d139;
+    /// @dev default address parameters for Hedge orders
+    IBaseOrderUtils.CreateOrderParamsAddresses public defaultOrderParamsAddresses;
 
     /**
      * @notice Constructs the Hedge contract
@@ -70,10 +72,20 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
         roleStore = IRoleStore(_roleStore);
         reader = IReader(_reader);
         dataStore = IDataStore(_dataStore);
+
+        // Initialize the default order params addresses
+        defaultOrderParamsAddresses = IBaseOrderUtils.CreateOrderParamsAddresses({
+            receiver: HEDGE_VAULT,
+            callbackContract: HEDGE_VAULT,
+            uiFeeReceiver: ZERO_ADDRESS,
+            market: GMX_MARKET,
+            initialCollateralToken: WETH,
+            swapPath: new address  // Assuming swap path is empty by default
+        });
     }
 
-     /**
-     * @notice Get the size of the short position held by the contract
+    /**
+     * @notice Get the size of the short position held by the contract's account
      * @return The size of the short position in USD
      */
     function getPositionSizeUsd() external view returns (uint256) {
@@ -84,8 +96,8 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
         return 0;
     }
 
-     /**
-     * @notice Get the size of the short position held by the contract
+    /**
+     * @notice Get the size of the short position held by the contract's account
      * @return The size of the short position in tokens
      */
     function getPositionSizeTokens() external view returns (uint256) {
@@ -96,8 +108,8 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
         return 0;
     }
 
-     /**
-     * @notice Get the size of the short position held by the contract
+    /**
+     * @notice Get the amount of collateral held by the contract's account
      * @return The size of the short position in USD
      */
     function getCollateralAmount() external view returns (uint256) {
@@ -108,27 +120,63 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
         return 0;
     }
 
+    /**
+     * @notice Converts USD value in 1e30 to vault shares in 1e18
+     * @param usdAmount The USD value to be converted, denominated in 1e30
+     * @return The equivalent amount of vault shares, denominated in 1e18
+     */
+    function usdToShares(uint256 usdAmount) internal pure returns (uint256) {
+        return usdAmount / 1e12;
+    }
+
+    /**
+     * @notice Converts vault shares in 1e18 to USD value in 1e30
+     * @param sharesAmount The amount of vault shares to be converted, denominated in 1e18
+     * @return The equivalent USD value, denominated in 1e30
+     */
+    function sharesToUsd(uint256 sharesAmount) internal pure returns (uint256) {
+        return sharesAmount * 1e12;
+    }
 
     /**
      * @notice Initiates the process to open a hedge position. Shares are not minted until
      *    afterOrderExecution is called
      * @param amount The amount of WETH to hedge
-     * @param user The address of the user initiating the hedge
-     * @param orderParams The order parameters for creating the hedge order
+     * @param acceptablePrice The acceptable price for the order
      * @return key The unique identifier for the created order
      * @return orderAccount The user account associated with the order
      */
     function hedge(
         uint256 amount,
-        address user,
-        IBaseOrderUtils.CreateOrderParams calldata orderParams
-    ) external returns (bytes32 key, address orderAccount) {
-        require(amount > 0, "Invalid deposit amount");
-        // Check order type first
-        require(orderParams.orderType == Order.OrderType.MarketIncrease, "Order must be a market increase");
-        // Validate all order params
+        uint256 acceptablePrice
+    ) external returns (bytes32 key, address orderAccount) {      
+        // Validate order params
         _validateOrderParams(orderParams, amount);
-        (key, orderAccount) = _hedge(amount, user, orderParams);
+
+        uint256 executionFee = 3000000000000; // Assumed execution fee in wei (3e-06 ETH)
+        uint256 initialCollateralDeltaAmount = amount - executionFee;
+        uint256 sizeDeltaUsd = (initialCollateralDeltaAmount * acceptablePrice) / 1e18;
+
+        IBaseOrderUtils.CreateOrderParamsNumbers memory orderParamsNumbers = IBaseOrderUtils.CreateOrderParamsNumbers({
+            sizeDeltaUsd: sizeDeltaUsd,
+            initialCollateralDeltaAmount: initialCollateralDeltaAmount,
+            triggerPrice: 0,
+            acceptablePrice: acceptablePrice,
+            executionFee: executionFee,
+            callbackGasLimit: 3_000_000, 
+            minOutputAmount: 0
+        });
+
+        IBaseOrderUtils.CreateOrderParams memory orderParams = IBaseOrderUtils.CreateOrderParams({
+            addresses: defaultOrderParamsAddresses,
+            numbers: orderParamsNumbers,
+            orderType: Order.OrderType.MarketIncrease,
+            decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
+            isLong: false,
+            shouldUnwrapNativeToken: true,
+            referralCode: bytes32(0)
+        });
+        (key, orderAccount) = _hedge(amount, msg.sender, orderParams);
     }
 
     /**
@@ -144,8 +192,6 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
         address user,
         IBaseOrderUtils.CreateOrderParams calldata orderParams
     ) internal returns (bytes32 key, address orderAccount) {
-        // Take Hedge fee logic here
-
         // Transfer funds to GMX Exchange Router
         IERC20(WETH).safeTransferFrom(user, ORDER_VAULT, amount);
 
@@ -167,34 +213,69 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
      * @param shares The quantity of shares to unhedge
      * @param orderParams The order parameters for creating the unhedge order
      */
-    function unHedge(address user, uint256 shares, IBaseOrderUtils.CreateOrderParams calldata orderParams) external {
-        // Check sender address
-        require(msg.sender == user, "Not user owner");
-        // Check user's available shares, considering locked shares
-        require(balanceOf(user) - lockedShares[user] >= shares, "Insufficient balance");
-        // Lock the shares
-        lockedShares[user] += shares;
-        // Check order type
-        require(orderParams.orderType == Order.OrderType.MarketDecrease, "Order must be a market decrease");
-
+    function unHedge(
+        uint256 shares,
+        uint256 acceptablePrice
+    ) external {
+        // Validate order params
         _validateOrderParams(orderParams, shares);
 
-        // Transfer execution fee to orderVault
-        IERC20(WETH).safeTransferFrom(
-            user,
-            ORDER_VAULT,
-            orderParams.numbers.executionFee
-        );
+        uint256 executionFee = 3000000000000; // Assumed execution fee in wei (3e-06 ETH)
+        uint256 initialCollateralDeltaAmount = (sharesToUsd(shares) / acceptablePrice) * 1e18; // Convert shares to collateral amount
+        uint256 sizeDeltaUsd = sharesToUsd(shares);
 
-        // Call Exchange Router to transfer execution fee to order vault
+        IBaseOrderUtils.CreateOrderParamsNumbers memory orderParamsNumbers = IBaseOrderUtils.CreateOrderParamsNumbers({
+            sizeDeltaUsd: sizeDeltaUsd,
+            initialCollateralDeltaAmount: initialCollateralDeltaAmount,
+            triggerPrice: 0,
+            acceptablePrice: acceptablePrice,
+            executionFee: executionFee,
+            callbackGasLimit: 3_000_000, // Set to 3 million gas
+            minOutputAmount: 0
+        });
+
+        IBaseOrderUtils.CreateOrderParams memory orderParams = IBaseOrderUtils.CreateOrderParams({
+            addresses: defaultOrderParamsAddresses,
+            numbers: orderParamsNumbers,
+            orderType: Order.OrderType.MarketDecrease,
+            decreasePositionSwapType: Order.DecreasePositionSwapType.NoSwap,
+            isLong: false,
+            shouldUnwrapNativeToken: true,
+            referralCode: bytes32(0)
+        });
+        _unHedge(msg.sender, shares, orderParams);
+    }
+    
+    /**
+     * @notice Internal function to handle the unhedging process
+     * @dev This function locks the shares, transfers the execution fee, and creates the order via the GMX Exchange Router
+     * @param user The address of the user initiating the unhedge
+     * @param shares The number of shares to unhedge
+     * @param orderParams The order parameters for creating the unhedge order
+     */
+    function _unHedge(
+        address user,
+        uint256 shares,
+        IBaseOrderUtils.CreateOrderParams calldata orderParams
+    ) internal {
+        // Check user's available shares, considering locked shares
+        require(balanceOf(user) - lockedShares[user] >= shares, "Insufficient balance");
+
+        // Lock the shares
+        lockedShares[user] += shares;
+
+        // Transfer execution fee to orderVault
+        IERC20(WETH).safeTransferFrom(user, ORDER_VAULT, orderParams.numbers.executionFee);
+
+        // Call Exchange Router to createOrder
         bytes32 key = Router(GMX_ROUTER).createOrder(orderParams);
 
         // Update orders and accounts
         accountOrders[user].push(key);
-        orders[key] = msg.sender;
+        orders[key] = user;
 
         // Emit HedgeClosed event
-        emit HedgeClosed(msg.sender, key, orderParams.numbers.sizeDeltaUsd);
+        emit HedgeClosed(user, key, orderParams.numbers.sizeDeltaUsd);
     }
 
     /**
@@ -223,30 +304,35 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
      * @param eventData Additional event data
      */
     function afterOrderExecution(bytes32 key, Order.Props memory order, EventUtils.EventLogData memory eventData) external override {
-        // Validate message origin as GMX Controller
         require(roleStore.hasRole(msg.sender, GMX_CONTROLLER), "Invalid role");
-        
-        // Get user account
-        address _user = orders[key];
 
-        // Remove from account orders list
+        address _user = orders[key];
         _removeOrder(key, _user);
 
-        // If increaseOrder (Hedge) then mint shares
         if (order.numbers.orderType == Order.OrderType.MarketIncrease) {
-            // Mint shares
-            _mint(_user, order.numbers.sizeDeltaUsd);
-        // If decreaseOrder (unHedge) initiate withdrawal
+            uint256 sharesToMint = usdToShares(order.numbers.sizeDeltaUsd);
+            _mint(_user, sharesToMint);
         } else if (order.numbers.orderType == Order.OrderType.MarketDecrease) {
-            // Burn shares and withdraw collateral
-            _burn(_user, order.numbers.sizeDeltaUsd);
-            IERC20(WETH).safeTransferFrom(ORDER_VAULT, _user, order.numbers.initialCollateralDeltaAmount);
-            // Unlock shares
-            lockedShares[_user] -= order.numbers.sizeDeltaUsd;
+            uint256 sharesToBurn = usdToShares(order.numbers.sizeDeltaUsd);
+            if (lockedShares[_user] >= sharesToBurn && balanceOf(_user) >= sharesToBurn) {
+                // User has enough shares, proceed with burn and transfer
+                _burn(_user, sharesToBurn);
+                IERC20(WETH).safeTransferFrom(ORDER_VAULT, _user, order.numbers.initialCollateralDeltaAmount);
+                lockedShares[_user] -= sharesToBurn;
+            } else {
+                // User does not have enough shares, contract holds the WETH
+                IERC20(WETH).safeTransferFrom(ORDER_VAULT, address(this), order.numbers.initialCollateralDeltaAmount);
+                // Log this event for later reconciliation
+                emit OrderExecuted(address(this), key, order.numbers.initialCollateralDeltaAmount);
+            }
+        } else {
+            // Handle unexpected order types if necessary
+            revert("Unexpected order type");
         }
 
         emit OrderExecuted(_user, key, order.numbers.initialCollateralDeltaAmount);
     }
+
 
     /**
      * @notice Callback function called after order cancellation
@@ -298,37 +384,30 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
     }
 
     /**
-     * @notice Function to verify validity of order parameters for the Hedge contract
-     * @param params The order parameters
+     * @notice Internal function to validate order parameters
+     * @dev This function ensures the amount and acceptable price are valid
      * @param amount The amount associated with the order
+     * @param acceptablePrice The acceptable price for the order
      */
-    function _validateOrderParams(IBaseOrderUtils.CreateOrderParams memory params, uint256 amount) internal view {
-        // Validate addresses
-        require(params.addresses.receiver == HEDGE_VAULT, "Invalid receiver address");
-        require(params.addresses.callbackContract == HEDGE_VAULT, "Invalid callback contract address");
-        require(params.addresses.uiFeeReceiver == ZERO_ADDRESS, "Invalid UI fee receiver address");
-        require(params.addresses.market == GMX_MARKET, "Invalid market address");
-        require(params.addresses.initialCollateralToken == WETH, "Invalid initial collateral token");
+    function _validateOrderParams(uint256 amount, uint256 acceptablePrice) internal view {
+        // Ensure the amount is greater than zero
+        require(amount > 0, "Invalid deposit amount");
+        // Ensure the acceptable price is greater than zero
+        require(acceptablePrice > 0, "Invalid acceptable price");
 
-        // Validate order type
-        if (params.orderType == Order.OrderType.MarketIncrease) {
-            // Validate numbers for deposits
-            require(params.numbers.sizeDeltaUsd == (params.numbers.initialCollateralDeltaAmount * params.numbers.acceptablePrice) / 1e18, "Invalid sizeDeltaUsd");
-            require(params.numbers.initialCollateralDeltaAmount + params.numbers.executionFee == amount, "Invalid collateral delta and execution fee");
-        } else if (params.orderType == Order.OrderType.MarketDecrease) {
-            // Additional checks for withdrawals can be implemented here
-            // Validate numbers for deposits
-            require(params.numbers.sizeDeltaUsd == (params.numbers.initialCollateralDeltaAmount * params.numbers.acceptablePrice) / 1e18, "Invalid sizeDeltaUsd");
-            require(params.numbers.initialCollateralDeltaAmount + params.numbers.executionFee == amount, "Invalid collateral delta and execution fee");
-        } else {
-            revert("Invalid order type");
-        }
+        // Optionally, add any other relevant checks specific to your contract's logic
+        // Example: Check if the amount is within an acceptable range
+        // require(amount >= MIN_AMOUNT && amount <= MAX_AMOUNT, "Amount out of range");
 
-        // Validate boolean flags
-        require(params.isLong == false, "Order must be short");
-        require(params.shouldUnwrapNativeToken == true, "Order must unwrap native token");
+        // Example: Check if the acceptable price is within an acceptable range
+        // require(acceptablePrice >= MIN_ACCEPTABLE_PRICE && acceptablePrice <= MAX_ACCEPTABLE_PRICE, "Acceptable price out of range");
     }
 
+    /**
+     * @notice Claims funding fees from the GMX Router
+     * @dev This function can only be called by the owner and claims fees for WETH and USDC tokens
+     * @return An array of funding fees claimed for each token
+     */
     function claimFundingFees() public onlyOwner returns (uint256[] memory) {
    
         address[] memory markets = new address[](2);
@@ -373,3 +452,4 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
         IERC20(token).safeTransfer(owner(), balance);
     }
 }
+

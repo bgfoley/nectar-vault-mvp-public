@@ -2,7 +2,7 @@ require('dotenv').config();
 const readlineSync = require('readline-sync');
 const { ethers } = require('ethers');
 const getExecutionFee = require('./get_execution_fee');
-const getSignedPrices = require('./get_signed_prices2');
+const getSignedPrices = require('./get_signed_prices');
 
 // Load environment variables
 const ARBITRUM_URL = process.env.ARBITRUM_URL;
