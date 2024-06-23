@@ -20,10 +20,9 @@ import {IDataStore} from "./interfaces/IDataStore.sol";
  * @title Hedge
  * @notice This contract allows users to deposit ETH to enter a delta neutral position on GMX V2. Shares represent USD
  *      value of the users' position and can be posted as collateral to mint necUSD.
- * @dev This contract interacts with GMX's Exchange Router and Order Callback Receiver.
- */
-contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
-    using SafeERC20 for IERC20;
+ * @dev This contract interacts with GMX's Exchange Router and Order Callback Receiver.*/
+ contract HVT is ERC20, Ownable, IOrderCallbackReceiver {
+   using SafeERC20 for IERC20;
 
     event HedgeOpened(address indexed user, bytes32 key, uint256 sizeDeltaUsd);
     event HedgeClosed(address indexed user, bytes32 key, uint256 sizeDeltaUsd);
@@ -73,16 +72,17 @@ contract Hedge is ERC20, Ownable, IOrderCallbackReceiver {
      * @notice Constructs the Hedge contract
      * @dev Sets the ERC20 token details and initializes Ownable
      */
-    constructor() ERC20("HedgeVault", "HEDGE") Ownable(msg.sender) {}
+    constructor() ERC20("HedgeVault", "HEDGE") Ownable(msg.sender) {
+        roleStore = IRoleStore(ROLESTORE_ADDRESS);
+        reader = IReader(READER_ADDRESS);
+        dataStore = IDataStore(DATASTORE_ADDRESS);
+        }
 
     /**
      * @notice Initializes the contract with necessary addresses
      * @dev This function must be called after deployment to set the required addresses
      */
     function initialize() external onlyOwner {
-        roleStore = IRoleStore(ROLESTORE_ADDRESS);
-        reader = IReader(READER_ADDRESS);
-        dataStore = IDataStore(DATASTORE_ADDRESS);
         defaultOrderParamsAddresses = IBaseOrderUtils.CreateOrderParamsAddresses({
             receiver: address(this),
             callbackContract: address(this),

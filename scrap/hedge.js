@@ -7,7 +7,7 @@ const getSignedPrices = require('../scripts/get_signed_prices');
 // Load environment variables
 const ARBITRUM_URL = process.env.ARBITRUM_URL;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
-// const HEDGE_CONTRACT_ADDRESS = process.env.HEDGE_CONTRACT_ADDRESS;
+const HEDGE_CONTRACT_ADDRESS = '0xA35021791259042B3c00E9C80618e2282183D945';
 const TOKEN_ADDRESS = '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1'; // Example token address
 
 // Connect to Arbitrum network
@@ -15,12 +15,10 @@ const provider = new ethers.JsonRpcProvider(ARBITRUM_URL);
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
 
 // Define the Hedge contract ABI (add your contract's ABI here)
-const hedgeAbi = [
- 
-];
+const hedgeAbi = [];
 
 // Connect to the Hedge contract
-// const hedgeContract = new ethers.Contract(HEDGE_CONTRACT_ADDRESS, hedgeAbi, wallet);
+const hedgeContract = new ethers.Contract(HEDGE_CONTRACT_ADDRESS, hedgeAbi, wallet);
 
 async function main() {
   try {
@@ -44,10 +42,10 @@ async function main() {
     console.log(`Acceptable Price: ${acceptablePrice}`);
     console.log(`Execution Fee: ${executionFeeBn} ETH`);
 
-    // Log the arguments that would be input for the hedge function call
-    console.log("Arguments for hedge function call:");
-    console.log(`Amount: ${depositEthBn}`);
-    console.log(`Acceptable Price: ${acceptablePrice}`);
+    // Step 6: Call the hedge function
+    const hedgeTx = await hedgeContract.hedge(depositEthBn, acceptablePrice);
+    await hedgeTx.wait();
+    console.log('Hedge function executed successfully');
 
   } catch (error) {
     console.error("Error in main script:", error);

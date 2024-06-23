@@ -7,7 +7,6 @@ import "../lib/Order.sol";
 /// @dev Interface for GMX's Exchange Router
 interface Router is IBaseOrderUtils {
     function sendWnt(
-        uint256 sendWnt,
         address receiver,
         uint256 amount
     ) external payable;
@@ -19,8 +18,8 @@ interface Router is IBaseOrderUtils {
     ) external payable;
 
     function createOrder(
-        CreateOrderParams calldata params
-    ) external returns (bytes32);
+        IBaseOrderUtils.CreateOrderParams calldata params
+    ) external payable returns (bytes32);
 
     function cancelOrder(bytes32 key) external;
 
