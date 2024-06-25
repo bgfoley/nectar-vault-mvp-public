@@ -7,7 +7,7 @@ async function main() {
   console.log("Deploying contracts with the account:", deployer.address);
   //console.log("Account balance:", (await deployer.getBalance()).toString());
 
-  const Hedge = await ethers.getContractFactory("PaySmdge");
+  const Hedge = await ethers.getContractFactory("NewSchmoodge");
   const hedge = await Hedge.deploy();
   console.log("Contract deployed to address:", hedge.address);
 
