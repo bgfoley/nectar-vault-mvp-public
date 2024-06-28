@@ -6,7 +6,7 @@ async function main() {
     const provider = new ethers.JsonRpcProvider(process.env.ARBITRUM_URL);
     const signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
     
-    const contractAddress = '0x3FF58C1be19443c9e3Ff19E6282765d05e47E819'; // Replace with your contract address
+    const contractAddress = '0x0dd0Afda85c095F50469E9479b7c2D6375f9eC63'; // Replace with your contract address
     const contractABI = [
         {
             "inputs": [

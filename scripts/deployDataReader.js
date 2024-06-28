@@ -1,4 +1,4 @@
-// script to deploy and initialize Hedge contract
+// script to deploy and initialize DataReader contract
 require('dotenv').config();
 const { ethers } = require('hardhat');
 
@@ -7,12 +7,13 @@ async function main() {
   console.log("Deploying contracts with the account:", deployer.address);
   //console.log("Account balance:", (await deployer.getBalance()).toString());
 
-  const Hedge = await ethers.getContractFactory("NewSchmoodge2");
-  const hedge = await Hedge.deploy();
-  console.log("Contract deployed to address:", hedge.address);
+  const DataReader = await ethers.getContractFactory("DataReader");
+  const dataReader = await DataReader.deploy();
+  
 
-  await hedge.initialize();
-  console.log("Hedge contract initialized");
+  const deploymentReceipt = await dataReader.deploymentTransaction().wait(2);
+  console.log(deploymentReceipt);
+
 }
 
 main()
