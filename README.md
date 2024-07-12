@@ -10,8 +10,41 @@ Nectar Vault MVP is designed to provide a robust and flexible vault system that 
 
 - **ERC4626 Compliance**: The vault contract follows the ERC4626 standard, ensuring compatibility with other DeFi protocols.
 - **Strategy Integration**: Easily integrate various investment strategies to optimize returns.
-- **Adapted from Yearn V2**: Leveraging the strengths of Yearn V2 vaults, translated from Vyper to Solidity for broader developer accessibility.
 - **Customizable Parameters**: Managers can customize strategies, accountants, roles, and more to fit specific needs.
+
+### Documentation
+
+[View the Documentation for Hedge](docs/Hedge.md)
+
+### References
+
+Docs for the GMX v2 contracts found in this repo's libraries and interfaces directories: https://gmx-docs.io/docs/api/contracts-v2/
+
+Chainlink contracts
+
+### Work In Progress
+
+This are currently in development. Progress thus far:
+- Demonstrate minimum viable functionality. 
+    - Hedge contract successfully creates orders on GMX to open and close positions
+    - Hedge mints and burns corresponding vault tokens according to order parameters
+- To Do
+   - **Contracts**:
+    - Integrate Vault.sol (ERC4626) with strategy (HEDGE)
+    - Hedge will have mint/burn access to Vault
+    - Intergrate DataReader with Strategy and Vault
+    - DataReader interfaces with GMX to pull main account data and ensure accurate share calculation
+    - DataReader interface with Vault for previewMint and other functions
+    - Derive reusable strategy contract from Hedge.sol
+   - **Scripts**:
+    - Debug order parameters for UnHedge
+    - Cleanup file naming 
+   - **Tests**:
+    - Cleanup directory and file naming
+    - Full coverage on all contracts
+    - Use Foundry for fuzzing
+
+
 
 ## Getting Started
 
@@ -43,6 +76,3 @@ We welcome collaboration from developers and contributors who are interested in 
 2. Commit your changes: git commit -m 'Add some feature'.
 3. Push to your branch: git push origin my-new-feature.
 4. Create a new Pull Request.
-
-
-GasUtils address: 0x6205489A49459bDD6B14CdC80D9E7991B829D48B

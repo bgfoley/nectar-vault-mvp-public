@@ -6,7 +6,7 @@ Nectar offers a suite of tokenized strategy vaults integrated with perpetuals de
 
 ## MVP
 
-The code-base in this repo is a work in progress and is not ready for deployment at a production level. Its purpose is to demonstrate the basic functionality of Nectar's Hedge product and to serve as prototype for the platform architecture.
+This repo contains work in progress, not recommended for production deployment. Its purpose is to demonstrate the basic functionality of Nectar's Hedge product and to serve as prototype for the platform's architecture.
 
 ## Definitions
 
@@ -17,23 +17,16 @@ The code-base in this repo is a work in progress and is not ready for deployment
 
 Hedge is a strategy vault that allows users to deposit assets such as ETH and wBTC to establish a delta-neutral position on GMX V2. Vault participants receive yield from the funding fees paid out through the perp dex, while ensuring minimal exposure to market volatility. Users receive shares representing the USD value of their position, which can be used as collateral to mint necUSD, a stablecoin. 
 
-
-## Hedge
-
-This contract allows users to deposit ETH to enter a delta neutral position on GMX V2. Shares represent USD
-     value of the users' position and can be posted as collateral to mint necUSD.
-
 _This contract interacts with GMX's Exchange Router and Order Callback Receiver._
 
-### State
+
+## State Variables
 
 ### User Data
 
 Users deposit assets into the strategy contract, which executes trades on GMX. User orders and account data is stored in the strategy contract. Order execution within the perp-dex level is confirmed within 5-20 blocks of the order being placed. The storage writes to the strategy ensure the proper accounting of user assets between order creation and order execution. 
 
-#### Note
-
-User data should be contained in a single data structure for Hedge's production model. 
+- **Note:** User data should be condensed to a single struct for Hedge's production model. 
 
 ### orders
 
@@ -87,7 +80,7 @@ _account balance of locked shares that are ready to burn in exchange for WETH_
 
 After a withdrawal order is executed on GMX and assets are returned to the strategy contract, the number of shares to burn is stored and should correspond with the the user's locked shares.
 
-NOTE: In production consider replacing this step by burning shares automatically when underlying assets are returned to user.
+- **Note:** In production consider replacing this step by burning shares automatically when underlying assets are returned to user.
 
 ### Exchange Data
 
@@ -154,11 +147,9 @@ address ZERO_ADDRESS
 ```solidity
 address HEDGE_VAULT
 ```
-#### Note
+- **Note:** In production, vault and strategy will be seperate contracts. Strategy will command mint/burn authority over vault.
 
-In production, vault and strategy will be seperate contracts. Strategy will command mint/burn authority over vault.
-
-### Interfaces
+## Interfaces
 
 ### roleStore
 
@@ -178,7 +169,7 @@ _default address parameters for Hedge orders_
 
 Strategy specific fixed order parameters.
 
-### Modifiers
+## Modifiers
 
 ### whenNotPaused
 
@@ -188,7 +179,7 @@ modifier whenNotPaused()
 
 Ensures that the contract is not paused. 
 
-### Functions
+## Functions
 
 ### constructor
 
@@ -269,7 +260,9 @@ receive() external payable
 function initialize() external
 ```
 
-Initializes default order parameter data
+Initializes default order parameter data.
+
+- **Note:** Use constructor for this in production
 
 _This function must be called after deployment 
 Reconfigure this as constructor for production deployment_
@@ -315,9 +308,7 @@ function hedge(uint256 amount, uint256 shares, uint256 price) external payable r
 
 Creates an order to open a hedge position. Users deposit ETH along with order parameters. Message value should be equal to deposit amount plus the execution fee.
 
-#### Note
-
-Production contract will include optionality to deposit using ETH or WETH.
+- **Note:** Must include optionality to deposit ETH or WETH in production.
 
 #### Parameters
 
