@@ -1,4 +1,4 @@
-# Nectar Vault MVP
+# Nectar Hedge Vault MVP
 
 This repository contains the vault and strategy contracts for Nectar's Hedge MVP. The vault contract is an implementation of the ERC4626 standard and is based on Yearn V2 vaults, adapted from Vyper to Solidity.
 
@@ -30,19 +30,19 @@ This are currently in development. Progress thus far:
     - Hedge mints and burns corresponding vault tokens according to order parameters
 - To Do
    - **Contracts**:
-    - Integrate Vault.sol (ERC4626) with strategy (HEDGE)
-    - Hedge will have mint/burn access to Vault
-    - Intergrate DataReader with Strategy and Vault
-    - DataReader interfaces with GMX to pull main account data and ensure accurate share calculation
-    - DataReader interface with Vault for previewMint and other functions
-    - Derive reusable strategy contract from Hedge.sol
+        - Integrate Vault.sol (ERC4626) with strategy (HEDGE)
+        - Hedge will have mint/burn access to Vault
+        - Intergrate DataReader with Strategy and Vault
+        - DataReader interfaces with GMX to pull main account data and ensure accurate share calculation
+        - DataReader interface with Vault for previewMint and other functions
+        - Derive reusable strategy contract from Hedge.sol
    - **Scripts**:
-    - Debug order parameters for UnHedge
-    - Cleanup file naming 
+        - Debug order parameters for UnHedge
+        - Cleanup file naming 
    - **Tests**:
-    - Cleanup directory and file naming
-    - Full coverage on all contracts
-    - Use Foundry for fuzzing
+        - Cleanup directory and file naming
+        - Full coverage on all contracts
+        - Use Foundry for fuzzing
 
 
 
