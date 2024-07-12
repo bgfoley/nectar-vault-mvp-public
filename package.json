@@ -23,7 +23,8 @@
     "dotenv": "^16.4.5",
     "ethers": "^6.13.0",
     "readline-sync": "^1.4.10",
-    "solhint": "^4.1.1"
+    "solhint": "^4.1.1",
+    "solidity-docgen": "^0.6.0-beta.36"
   },
   "scripts": {
     "prettier": "prettier --write --plugin=prettier-plugin-solidity 'contracts/**/*.sol'"

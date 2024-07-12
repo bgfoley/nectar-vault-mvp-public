@@ -3,6 +3,7 @@ require('@nomicfoundation/hardhat-toolbox');
 require('hardhat-gas-reporter');
 require('@typechain/hardhat');
 require('hardhat-contract-sizer');
+require('solidity-docgen');
 
 module.exports = {
   solidity: {
@@ -42,4 +43,9 @@ module.exports = {
     outDir: "typechain",
     target: "ethers-v6",
   },
+  docgen: {
+    input: "./contracts",       // Your contracts folder
+    output: "./docs",           // The output folder for generated docs
+    pages: "files"
+  }
 };
